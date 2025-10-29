@@ -9,3 +9,22 @@ When a user needs to prove their identity or credentials, they use the mobile wa
 The backend APIs (Node.js) handle all issuer and verifier operations, connecting to PostgreSQL for metadata storage and Redis for caching. The issuer portal lets organizations register, create credential schemas, issue credentials in bulk, and manage revocations. The verifier service exposes endpoints to validate presentations and check credential status. All communication is authenticated via JWT tokens, with rate limiting and anomaly detection to prevent abuse. The audit-logs service aggregates all events (issuance, verification, revocation) into Elasticsearch for compliance, allowing complete audit trails for regulatory requirements like GDPR.
 
 Recovery and key management use threshold social recovery—users designate 3-5 guardians (trusted contacts) who hold shares of a recovery key. If a user loses their phone, they contact their guardians, and any 2-3 of them can help restore access without compromising security. For enterprises, hardware key support (HSM) is available. The entire system is designed with privacy-first principles: pairwise DIDs prevent cross-service tracking, selective disclosure limits data exposure, and the parachain stores only what's necessary. Everything is standards-based (W3C Verifiable Credentials, Decentralized Identifiers) ensuring interoperability beyond PortableID.
+
+## Trust Design
+
+Users can intentionally create multiple DIDs on different devices for privacy and security reasons:
+- Pairwise DIDs per verifier (different DID for clinic vs. bank prevents cross-service tracking)
+- Device-specific DIDs for security isolation
+- Backup devices in case primary device is lost
+
+**How trust is maintained:**
+
+1. **Issuer knows the user, not the DID** - When an NGO issues a credential, they verify the person's identity first (face-to-face, biometric, etc.), then issue to whatever DID the user presents. Multiple DIDs don't matter because the issuer authenticated the *person*, not the DID.
+
+2. **Revocation is tied to the person, not DID** - If a credential becomes invalid, the issuer revokes it. They track the *user* (with name, ID number, biometric hash), not specific DIDs. So revoking one DID's credential also revokes all other DIDs' copies of that same credential.
+
+3. **Audit logs track the person** - Every issuance/revocation is logged with the issuer's verification method (who they confirmed the user was). If someone tries to claim multiple identities, audit logs expose the inconsistency.
+
+4. **Offline verification catches fakes** - When a verifier checks a credential offline, they verify the signature against the issuer's public key. A forged credential from a fake DID won't pass cryptographic validation.
+
+**Bottom line:** The platform trusts *issuers* to verify people, not DIDs to be unique. Multiple DIDs are a feature, not a bug.
